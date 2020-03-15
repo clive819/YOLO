@@ -31,6 +31,7 @@ for epoch in range(1000):
         x = model(x)
         loss = criterion(x, y, epoch)
         loss.backward()
+        torch.nn.utils.clip_grad_value_(model.parameters(), 10.)
         optimizer.step()
 
         losses.append(loss.cpu().item())
