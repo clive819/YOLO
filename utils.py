@@ -85,14 +85,14 @@ class COCODataset(Dataset):
             centerY = y + h / 2.
             centerY = centerY / imgHeight * gridH
 
-            w = w / imgWidth * cc.targetWidth
-            h = h / imgHeight * cc.targetHeight
+            w = w / imgWidth * cc.targetWidth + 1e-7
+            h = h / imgHeight * cc.targetHeight + 1e-7
 
             bestAnchorIdx = self.findBestAnchor(w, h)
             anchor = ylc.anchors[bestAnchorIdx]
 
-            width = np.log(w) / anchor[0]
-            height = np.log(h) / anchor[1]
+            width = max(0., np.log(w) / anchor[0])
+            height = max(0., np.log(h) / anchor[1])
 
             gridX = int(np.floor(centerX))
             gridY = int(np.floor(centerY))
