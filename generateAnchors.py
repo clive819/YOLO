@@ -1,4 +1,4 @@
-from config import COCOConfig as cc
+from config import cc
 from pycocotools.coco import COCO
 import numpy as np
 
@@ -14,6 +14,7 @@ coco = COCO(annFile)
 ids = list(sorted(coco.imgs.keys()))
 
 data = []
+maxCount = 0
 
 for idx in ids:
     annIDs = coco.getAnnIds(imgIds=idx)
@@ -21,6 +22,7 @@ for idx in ids:
 
     imgInfo = coco.loadImgs(idx)[0]
     imgHeight, imgWidth = imgInfo['height'], imgInfo['width']
+    maxCount = max(maxCount, len(anns))
 
     for ann in anns:
         _, _, w, h = ann['bbox']
@@ -28,6 +30,7 @@ for idx in ids:
         data.append([w, h])
 
 data = np.array(data)
+print('[*] Max box per image: {}'.format(maxCount))
 
 
 # MARK: - K-means
