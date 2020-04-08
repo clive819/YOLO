@@ -314,4 +314,5 @@ dmypy.json
 .pyre/
 
 # End of https://www.gitignore.io/api/osx,git,macos,python,pycharm,dropbox,pycharm+all
-.instances_train2017.json
+*.pdf
+instances_train2017.json
