@@ -2,7 +2,6 @@ from torchvision.ops import nms
 from config import *
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 
 class _transitionLayer(nn.Module):
@@ -97,14 +96,6 @@ class YOLO(nn.Module):
 
         self.backbone = DenseNet()
         self.yolo = nn.Conv2d(self.backbone.outChannels, ylc.numAnchors * (5 + ylc.numClasses), 1)
-
-        self.apply(self.initBias)
-
-    @staticmethod
-    def initBias(module):
-        if isinstance(module, nn.Conv2d):
-            if module.bias is not None:
-                torch.nn.init.zeros_(module.bias)
 
     def computeLosses(self, x, y):
         y, boxes, grid, anchors, gridDenominator, imgDenominator = y
@@ -207,7 +198,6 @@ class YOLO(nn.Module):
         lossWH = coordMask * (predWH - trueWH) * coordScale * ylc.coordScale
         lossWH = torch.sum(lossWH ** 2) / coordCount
 
-        # lossClass = objMask * F.binary_cross_entropy(predClasses, trueClasses, reduction='none')
         lossClass = objMask * (predClasses - trueClasses)
         lossClass = torch.sum(lossClass ** 2) / objCount
 

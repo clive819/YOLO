@@ -1,3 +1,4 @@
+from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data.dataset import Dataset
 from pycocotools.coco import COCO
 from io import BytesIO
@@ -104,3 +105,32 @@ class COCODataset(Dataset):
         boxes = torch.as_tensor(boxes)
 
         return cc.transforms(img), target, boxes
+
+
+class MetricsLogger(object):
+    def __init__(self, folder='./logs'):
+        self.writer = SummaryWriter(folder)
+        self.memory = {}
+
+    def addScalar(self, tag: str, value, step=None, wallTime=None):
+        self.writer.add_scalar(tag, value, step, wallTime)
+
+    def close(self):
+        self.writer.close()
+
+    def flush(self):
+        self.writer.flush()
+
+    def step(self, metrics: dict, epoch: int, batch: int):
+        for key in metrics:
+            self.writer.add_scalar('Epoch {}/{}'.format(epoch, key), metrics[key], batch)
+            if key in self.memory:
+                self.memory[key].append(metrics[key])
+            else:
+                self.memory[key] = [metrics[key]]
+
+    def epochEnd(self, epoch: int):
+        for key in self.memory:
+            avg = np.mean(self.memory[key])
+            self.writer.add_scalar('Average/{}'.format(key), avg, epoch)
+        self.memory.clear()

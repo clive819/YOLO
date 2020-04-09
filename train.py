@@ -1,9 +1,8 @@
 from torch.utils.data.dataloader import DataLoader
-from torch.utils.tensorboard import SummaryWriter
-from utils import COCODataset
 from torch.optim import SGD, Adam
 from config import device, tc
 from model import YOLO
+from utils import *
 import torch
 import numpy as np
 
@@ -20,9 +19,9 @@ if tc.preTrainedWeight:
     model.warmUpBatch = tc.warmUpBatches
 
 optimizer = Adam(model.parameters(), lr=1e-4)
-writer = SummaryWriter('./logs')
 prevBestLoss = np.inf
 batches = len(dataLoader)
+logger = MetricsLogger()
 
 
 model.train()
@@ -35,6 +34,8 @@ for epoch in range(tc.epochs):
         losses.append(loss.cpu().item())
 
         metrics = model.metrics
+        logger.step(metrics, epoch, batch)
+        logger.step({'Loss': losses[-1]}, epoch, batch)
         print('Epoch {} | {} / {}'.format(epoch, batch, batches), end='')
         for key in metrics:
             print(' | {}: {:.4f}'.format(key, metrics[key]), end='')
@@ -42,20 +43,16 @@ for epoch in range(tc.epochs):
 
         optimizer.zero_grad()
         loss.backward()
-        # torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
         optimizer.step()
 
-        for key in metrics:
-            writer.add_scalar('Epoch {}/{}'.format(epoch, key), metrics[key], batch)
-
+    logger.epochEnd(epoch)
     avgLoss = np.mean(losses)
-    writer.add_scalar('Avg loss', avgLoss, epoch)
-    print('Epoch {}, loss: {:.8f}'.format(epoch, avgLoss))
+    print('\nEpoch {}, loss: {:.8f}'.format(epoch, avgLoss))
 
     if avgLoss < prevBestLoss:
         print('[+] Loss improved from {:.8f} to {:.8f}, saving model...'.format(prevBestLoss, avgLoss))
         torch.save(model.state_dict(), 'model.pt')
         prevBestLoss = avgLoss
-        writer.add_scalar('Model', avgLoss, epoch)
-    writer.flush()
-writer.close()
+        logger.addScalar('Model', avgLoss, epoch)
+    logger.flush()
+logger.close()
