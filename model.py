@@ -240,12 +240,12 @@ class YOLO(nn.Module):
 
         gridX, gridY = torch.arange(W), torch.arange(H)
         gridY, gridX = torch.meshgrid(gridY, gridX)
-        grid = torch.stack((gridX, gridY), -1).type_as(x).to(device)
+        grid = torch.stack((gridX, gridY), -1).type_as(x)
         grid = grid.view(1, H, W, 1, 2).repeat(N, 1, 1, ylc.numAnchors, 1)
 
-        anchors = torch.Tensor(ylc.anchors).type_as(x).view(1, 1, 1, ylc.numAnchors, 2).to(device)
-        gridDenominator = torch.Tensor([W, H]).type_as(x).view(1, 1, 1, 1, 2).to(device)
-        imgDenominator = torch.Tensor([imgW, imgH]).type_as(x).view(1, 1, 1, 1, 2).to(device)
+        anchors = torch.Tensor(ylc.anchors).type_as(x).view(1, 1, 1, ylc.numAnchors, 2)
+        gridDenominator = torch.Tensor([W, H]).type_as(x).view(1, 1, 1, 1, 2)
+        imgDenominator = torch.Tensor([imgW, imgH]).type_as(x).view(1, 1, 1, 1, 2)
 
         conf = torch.sigmoid(out[..., :1])
         xy = (torch.sigmoid(out[..., 1:3]) + grid) / gridDenominator
@@ -259,7 +259,7 @@ class YOLO(nn.Module):
         # MARK:- inference
         ans = []
 
-        for confidence, coordMin, side, cat in zip(conf, xy, wh, classes):
+        for confidence, coord, side, cat in zip(conf, xy, wh, classes):
             res = []
 
             # MARK: - ignore objects that has low confidence
@@ -269,12 +269,13 @@ class YOLO(nn.Module):
                 continue
 
             confidence = confidence[objMask]
-            coordMin = coordMin[objMask]
+            coord = coord[objMask]
             side = side[objMask]
             cat = cat[objMask]
 
-            coordMax = coordMin + side / 2
-            boxes = torch.cat((coordMin, coordMax), -1)
+            x1y1 = coord - side / 2
+            x2y2 = coord + side / 2
+            boxes = torch.cat((x1y1, x2y2), -1)
             categories = torch.argmax(cat, -1).type_as(boxes)
 
             for catID in range(ylc.numClasses):
