@@ -46,8 +46,8 @@ class COCOConfig(object):
 
 
 class TrainingConfig(object):
-    epochs          = 100
-    batchSize       = 8
+    epochs          = 1000
+    batchSize       = 16
     warmUpBatches   = 10000
 
     annFile             = '/kaggle/input/coco2017/annotations_trainval2017/annotations/instances_train2017.json'

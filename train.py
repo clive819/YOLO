@@ -18,7 +18,7 @@ if tc.preTrainedWeight:
     model.load_state_dict(torch.load(tc.preTrainedWeight, map_location=device))
     model.warmUpBatch = tc.warmUpBatches
 
-optimizer = Adam(model.parameters(), lr=1e-4)
+optimizer = SGD(model.parameters(), lr=1e-3)
 prevBestLoss = np.inf
 batches = len(dataLoader)
 logger = MetricsLogger()
@@ -36,13 +36,15 @@ for epoch in range(tc.epochs):
         metrics = model.metrics
         logger.step(metrics, epoch, batch)
         logger.step({'Loss': losses[-1]}, epoch, batch)
-        print('Epoch {} | {} / {}'.format(epoch, batch, batches), end='')
+        log = 'Epoch {} | {} / {}'.format(epoch, batch, batches)
         for key in metrics:
-            print(' | {}: {:.4f}'.format(key, metrics[key]), end='')
-        print(' | loss: {:.4f}\r'.format(losses[-1]), end='')
+            log += ' | {}: {:.4f}'.format(key, metrics[key])
+        log += ' | loss: {:.4f}\r'.format(losses[-1])
+        print(log, end='')
 
         optimizer.zero_grad()
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
         optimizer.step()
 
     logger.epochEnd(epoch)
