@@ -1,7 +1,5 @@
 # YOLO
-![](https://img.shields.io/badge/license-MIT-blue) 
-![](https://img.shields.io/badge/Python-3-blue) 
-![](https://img.shields.io/badge/PyTorch-up%20to%20date-brightgreen)
+![](https://img.shields.io/badge/license-MIT-blue) ![](https://img.shields.io/badge/Python-3-blue) ![](https://img.shields.io/badge/PyTorch-up%20to%20date-brightgreen)
 
 ## TODO list:
 - [ ] Multi-GPU

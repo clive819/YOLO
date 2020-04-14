@@ -98,7 +98,7 @@ class YOLO(nn.Module):
         self.yolo = nn.Conv2d(self.backbone.outChannels, ylc.numAnchors * (5 + ylc.numClasses), 1)
 
     def computeLosses(self, x, y):
-        y, boxes, grid, anchors, gridDenominator, imgDenominator = y
+        y, boxes, grid, anchors, gridSize, imgSize = y
 
         # MARK: - adjust prediction
         predConf = x[..., :1]
@@ -114,11 +114,11 @@ class YOLO(nn.Module):
 
         # MARK: - ignore box that overlap some ground truth by 0.5
         trueBoxes = boxes
-        trueBoxesXY = trueBoxes[..., :2] / gridDenominator
-        trueBoxesWH = trueBoxes[..., 2:] / imgDenominator
+        trueBoxesXY = trueBoxes[..., :2] / gridSize
+        trueBoxesWH = trueBoxes[..., 2:] / imgSize
 
-        predBoxesXY = torch.unsqueeze(predXY, -2)
-        predBoxesWH = torch.unsqueeze(predWH, -2)
+        predBoxesXY = torch.unsqueeze(predXY / gridSize, -2)
+        predBoxesWH = torch.unsqueeze(torch.expm1(predWH) * anchors / imgSize, -2)
 
         # calc IoU
         trueHalf = trueBoxesWH / 2
@@ -147,20 +147,25 @@ class YOLO(nn.Module):
         coordMask = objMask
 
         # MARK: - compute IoU & recall
-        trueHalf = trueWH / 2
-        trueMin = trueXY - trueHalf
-        trueMax = trueXY + trueHalf
+        tXY = trueXY / gridSize
+        tWH = torch.expm1(trueWH) * anchors / imgSize
+        pXY = predXY / gridSize
+        pWH = torch.expm1(predWH) * anchors / imgSize
 
-        predHalf = predWH / 2
-        predMin = predXY - predHalf
-        predMax = predXY + predHalf
+        trueHalf = tWH / 2
+        trueMin = tXY - trueHalf
+        trueMax = tXY + trueHalf
+
+        predHalf = pWH / 2
+        predMin = pXY - predHalf
+        predMax = pXY + predHalf
 
         intersectMin = torch.max(predMin, trueMin)
         intersectMax = torch.min(predMax, trueMax)
         intersectWH = torch.max(intersectMax - intersectMin, torch.zeros_like(intersectMax))
 
-        trueArea = trueWH[..., 0] * trueWH[..., 1]
-        predArea = predWH[..., 0] * predWH[..., 1]
+        trueArea = tWH[..., 0] * tWH[..., 1]
+        predArea = pWH[..., 0] * pWH[..., 1]
         intersectArea = intersectWH[..., 0] * intersectWH[..., 1]
         unionArea = trueArea + predArea - intersectArea
 
@@ -177,7 +182,7 @@ class YOLO(nn.Module):
         avgIou = torch.sum(iou) / objCount
 
         # increase the loss scale for small box
-        coordScale = torch.expm1(trueWH) * anchors / imgDenominator
+        coordScale = torch.expm1(trueWH) * anchors / imgSize
         coordScale = torch.unsqueeze(2. - (coordScale[..., 0] * coordScale[..., 1]), -1)
 
         # MARK: - warm up training
@@ -198,8 +203,7 @@ class YOLO(nn.Module):
         lossWH = coordMask * (predWH - trueWH) * coordScale * ylc.coordScale
         lossWH = torch.sum(lossWH ** 2) / coordCount
 
-        lossClass = objMask * (predClasses - trueClasses)
-        lossClass = torch.sum(lossClass ** 2) / objCount
+        lossClass = nn.functional.binary_cross_entropy_with_logits(predClasses * objMask, trueClasses * objMask)
 
         metrics = {
             'lossConf': lossConf,
@@ -234,20 +238,23 @@ class YOLO(nn.Module):
         grid = grid.view(1, H, W, 1, 2).repeat(N, 1, 1, ylc.numAnchors, 1)
 
         anchors = torch.Tensor(ylc.anchors).type_as(x).view(1, 1, 1, ylc.numAnchors, 2)
-        gridDenominator = torch.Tensor([W, H]).type_as(x).view(1, 1, 1, 1, 2)
-        imgDenominator = torch.Tensor([imgW, imgH]).type_as(x).view(1, 1, 1, 1, 2)
+        gridSize = torch.Tensor([W, H]).type_as(x).view(1, 1, 1, 1, 2)
+        imgSize = torch.Tensor([imgW, imgH]).type_as(x).view(1, 1, 1, 1, 2)
 
         conf = torch.sigmoid(out[..., :1])
-        xy = (torch.sigmoid(out[..., 1:3]) + grid) / gridDenominator
-        wh = torch.expm1(out[..., 3:5]) * anchors / imgDenominator
-        classes = torch.sigmoid(out[..., 5:])
+        xy = torch.sigmoid(out[..., 1:3]) + grid
+        wh = out[..., 3:5]
+        classes = out[..., 5:]
 
         if target is not None:
             out = torch.cat([conf, xy, wh, classes], -1)
-            return self.computeLosses(out, [target, boxes, grid, anchors, gridDenominator, imgDenominator])
+            return self.computeLosses(out, [target, boxes, grid, anchors, gridSize, imgSize])
 
         # MARK:- inference
         ans = []
+
+        xy /= gridSize
+        wh = torch.expm1(out[..., 3:5]) * anchors / imgSize
 
         for confidence, coord, side, cat in zip(conf, xy, wh, classes):
             res = []
